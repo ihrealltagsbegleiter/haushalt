@@ -900,6 +900,16 @@
   </div>
   <div style="padding:16px 20px 8px;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);">Letzte 28 Tage</div>
   <div class="streak-grid" id="streak-grid"></div>
+
+  <!-- Cloud Backup -->
+  <div style="margin:16px 20px 0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:12px;">☁️ Cloud-Backup (Supabase)</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="pushToSupabase()" style="flex:1;padding:11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--accent-soft);color:var(--accent);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">⬆ Jetzt sichern</button>
+      <button onclick="pullFromSupabase()" style="flex:1;padding:11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text-muted);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">⬇ Wiederherstellen</button>
+    </div>
+    <div id="sync-status" style="font-size:12px;margin-top:10px;min-height:16px;text-align:center;transition:color 0.3s;"></div>
+  </div>
 </div>
 
 <!-- VIEW: AUFGABEN VERWALTEN -->
@@ -1073,6 +1083,89 @@
 <script>
 // ============ STATE ============
 const STORAGE_KEY = 'haushalt_v1';
+
+// ============ SUPABASE BACKUP ============
+const SB_URL  = 'https://cuukfowezhcosjnuckuo.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1dWtmb3dlemhjb3NqbnVja3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTc3MTYsImV4cCI6MjA5NTk3MzcxNn0.vMs9Z4Hk0oe2k-qPR9Nq0oUNsO_3X-DbTu8Y5OyK_NA';
+const SB_HEADERS = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Prefer': 'resolution=merge-duplicates' };
+
+// Stabile Geräte-ID (einmalig generiert, bleibt im localStorage)
+function getDeviceId() {
+  let id = localStorage.getItem('haushalt_device_id');
+  if (!id) {
+    id = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+    localStorage.setItem('haushalt_device_id', id);
+  }
+  return id;
+}
+
+let sbSyncTimeout = null;
+
+// Wird nach jedem save() verzögert aufgerufen (debounced 5s)
+function scheduleCloudSync() {
+  clearTimeout(sbSyncTimeout);
+  sbSyncTimeout = setTimeout(pushToSupabase, 5000);
+}
+
+async function pushToSupabase() {
+  try {
+    const body = JSON.stringify({
+      device_id: getDeviceId(),
+      state_json: state,
+      app_version: '1.0',
+      saved_at: new Date().toISOString()
+    });
+    const res = await fetch(`${SB_URL}/rest/v1/haushalt_backup`, {
+      method: 'POST',
+      headers: SB_HEADERS,
+      body
+    });
+    if (res.ok) {
+      setSyncStatus('✅ Cloud-Backup gespeichert', 'green');
+    } else {
+      setSyncStatus('⚠️ Backup fehlgeschlagen', 'amber');
+    }
+  } catch(e) {
+    setSyncStatus('📵 Offline – lokal gespeichert', 'dim');
+  }
+}
+
+async function pullFromSupabase() {
+  setSyncStatus('⏳ Lade Backup…', 'accent');
+  try {
+    const res = await fetch(
+      `${SB_URL}/rest/v1/haushalt_backup?device_id=eq.${getDeviceId()}&select=state_json,saved_at`,
+      { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
+    );
+    const data = await res.json();
+    if (data && data.length > 0) {
+      const remote = data[0];
+      const d = new Date(remote.saved_at);
+      const label = `${d.getDate()}.${d.getMonth()+1}.${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      if (confirm(`Cloud-Backup vom ${label} wiederherstellen?\n\nAchtung: Lokale Daten werden überschrieben.`)) {
+        state = { ...state, ...remote.state_json };
+        save();
+        render();
+        setSyncStatus('✅ Wiederhergestellt: ' + label, 'green');
+      } else {
+        setSyncStatus('', '');
+      }
+    } else {
+      setSyncStatus('ℹ️ Kein Backup für dieses Gerät gefunden', 'dim');
+    }
+  } catch(e) {
+    setSyncStatus('📵 Offline – kein Abruf möglich', 'dim');
+  }
+}
+
+function setSyncStatus(msg, color) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  const colors = { green:'var(--green)', amber:'var(--amber)', accent:'var(--accent)', dim:'var(--text-dim)', '':'' };
+  el.textContent = msg;
+  el.style.color = colors[color] || 'var(--text-muted)';
+  if (msg) setTimeout(() => { if(el.textContent===msg) el.textContent=''; }, 6000);
+}
 let state = {
   tasks: [],
   areas: [],        // [{ id, name, emoji, color }]
@@ -1102,6 +1195,7 @@ function load() {
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  scheduleCloudSync();
 }
 
 function seedDefaults() {
