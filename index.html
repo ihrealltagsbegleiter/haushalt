@@ -1684,12 +1684,63 @@ function updateTimerDisplay() {
   clock.className = 'timer-clock' + (timerRunning ? ' running' : '');
 }
 
+// ============ WAKE LOCK ============
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    // Re-acquire after visibility change (iOS/Android gibt es beim Tab-Wechsel frei)
+    document.addEventListener('visibilitychange', reacquireWakeLock, { once: false });
+  } catch(e) { /* Wake Lock nicht verfügbar – kein Fehler */ }
+}
+
+async function reacquireWakeLock() {
+  if (timerRunning && document.visibilityState === 'visible' && !wakeLock) {
+    try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+  document.removeEventListener('visibilitychange', reacquireWakeLock);
+}
+
+// ============ AUDIO ============
+function playDoneSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Drei ansteigende Töne: C5 → E5 → G5
+    const notes = [523.25, 659.25, 783.99];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.18;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.4, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      osc.start(t);
+      osc.stop(t + 0.4);
+    });
+    setTimeout(() => ctx.close(), 1500);
+  } catch(e) {}
+}
+
 function timerToggle() {
   if (timerRunning) {
     // Pause
     clearInterval(timerInterval);
     timerRunning = false;
     timerInterval = null;
+    releaseWakeLock();
     document.getElementById('timer-main-btn').textContent = '▶ Weiter';
     document.getElementById('timer-main-btn').className = 'timer-btn primary';
     document.getElementById('timer-done-btn').style.display = 'block';
@@ -1697,6 +1748,7 @@ function timerToggle() {
   } else {
     // Start / Resume
     timerRunning = true;
+    requestWakeLock();
     timerInterval = setInterval(() => {
       timerSeconds++;
       updateTimerDisplay();
@@ -1720,6 +1772,7 @@ function timerReset() {
   timerRunning = false;
   timerInterval = null;
   timerSeconds = 0;
+  releaseWakeLock();
   updateTimerDisplay();
   document.getElementById('timer-main-btn').textContent = '▶ Start';
   document.getElementById('timer-main-btn').className = 'timer-btn primary';
@@ -1733,12 +1786,15 @@ function timerFinish() {
   clearInterval(timerInterval);
   timerRunning = false;
   timerInterval = null;
+  releaseWakeLock();
   document.getElementById('timer-bar').classList.remove('visible');
+
+  // Ton abspielen
+  playDoneSound();
 
   // Save log
   if (!state.timeLogs[timerTaskId]) state.timeLogs[timerTaskId] = [];
   state.timeLogs[timerTaskId].unshift({ date: today(), seconds: timerSeconds });
-  // Keep max 10 entries per task
   if (state.timeLogs[timerTaskId].length > 10) state.timeLogs[timerTaskId].pop();
   save();
 
@@ -1768,8 +1824,6 @@ function timerFinish() {
     else msg = `⏳ ${fmtTime(diff)} länger als geschätzt.`;
   }
 
-  // Inject result
-  const display = document.getElementById('timer-display') || document.querySelector('.timer-display');
   const resultEl = document.createElement('div');
   resultEl.style.cssText = 'margin-top:12px;font-size:15px;font-weight:600;color:var(--green);text-align:center;';
   resultEl.textContent = msg;
