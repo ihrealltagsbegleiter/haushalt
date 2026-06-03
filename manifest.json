@@ -1,0 +1,19 @@
+{
+  "name": "Haushaltsroutinen",
+  "short_name": "Haushalt",
+  "description": "ADHS-freundliche Haushaltsroutinen",
+  "start_url": "/haushalt/",
+  "scope": "/haushalt/",
+  "display": "standalone",
+  "background_color": "#0e0e12",
+  "theme_color": "#0e0e12",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/haushalt/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/haushalt/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/haushalt/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/haushalt/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "categories": ["lifestyle", "productivity"],
+  "lang": "de"
+}
