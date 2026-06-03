@@ -1213,9 +1213,9 @@ async function pushToSupabase() {
       app_version: '1.0',
       saved_at: new Date().toISOString()
     });
-    const res = await fetch(`${SB_URL}/rest/v1/haushalt_backup`, {
+    const res = await fetch(`${SB_URL}/rest/v1/haushalt_backup?on_conflict=device_id`, {
       method: 'POST',
-      headers: SB_HEADERS,
+      headers: { ...SB_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
       body
     });
     if (res.ok) {
