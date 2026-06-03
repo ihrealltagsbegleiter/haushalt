@@ -1,4 +1,4 @@
-const CACHE = "haushalt-v1";
+const CACHE = "haushalt-v2";
 const ASSETS = ["/haushalt/", "/haushalt/index.html", "/haushalt/manifest.json", "/haushalt/icon-192.png", "/haushalt/icon-512.png"];
 
 self.addEventListener("install", e => {
