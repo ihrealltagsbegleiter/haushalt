@@ -721,7 +721,119 @@
     margin-top: 4px;
     transition: all 0.15s;
   }
-  .add-area-btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* TIMER MODAL */
+  .timer-display {
+    text-align: center;
+    padding: 24px 0 16px;
+  }
+  .timer-clock {
+    font-family: 'Syne', sans-serif;
+    font-size: 64px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    color: var(--text);
+    line-height: 1;
+    transition: color 0.3s;
+  }
+  .timer-clock.running { color: var(--accent); }
+  .timer-clock.done-color { color: var(--green); }
+  .timer-task-name {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+  .timer-estimate {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .timer-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .timer-btn {
+    flex: 1;
+    padding: 15px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .timer-btn.primary { background: var(--accent); color: #fff; }
+  .timer-btn.primary:hover { opacity: 0.9; }
+  .timer-btn.secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
+  .timer-btn.secondary:hover { color: var(--text); border-color: var(--text-muted); }
+  .timer-btn.success { background: var(--green); color: #0e0e12; }
+
+  .timer-history {
+    margin-top: 20px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+  .timer-history-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .timer-log-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .timer-log-row:last-child { border-bottom: none; }
+  .timer-log-date { color: var(--text-muted); }
+  .timer-log-time { font-family: 'Syne', sans-serif; font-weight: 700; }
+  .timer-log-vs {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+  }
+  .timer-log-vs.faster { background: var(--green-soft); color: var(--green); }
+  .timer-log-vs.slower { background: rgba(248,113,113,0.12); color: var(--red); }
+  .timer-log-vs.equal { background: var(--surface2); color: var(--text-muted); }
+
+  /* FLOATING TIMER BAR */
+  .timer-bar {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50px;
+    padding: 8px 18px;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    z-index: 300;
+    box-shadow: 0 4px 20px rgba(124,109,250,0.5);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .timer-bar.visible { display: flex; }
+  .timer-bar-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.6);
+    animation: pulse-dot 1s ease infinite;
+  }
+  @keyframes pulse-dot {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
 </style>
 </head>
 <body>
@@ -906,6 +1018,34 @@
   </div>
 </div>
 
+<!-- TIMER BAR (floating, sichtbar während Timer läuft) -->
+<div class="timer-bar" id="timer-bar" onclick="openTimerModal()">
+  <div class="timer-bar-dot"></div>
+  <span id="timer-bar-name"></span>
+  <span id="timer-bar-time">00:00</span>
+</div>
+
+<!-- TIMER MODAL -->
+<div class="modal-overlay" id="modal-timer">
+  <div class="modal" style="max-height:85vh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div class="timer-display">
+      <div class="timer-clock" id="timer-clock">00:00</div>
+      <div class="timer-task-name" id="timer-task-name"></div>
+      <div class="timer-estimate" id="timer-estimate"></div>
+    </div>
+    <div class="timer-controls">
+      <button class="timer-btn secondary" id="timer-reset-btn" onclick="timerReset()">↺ Reset</button>
+      <button class="timer-btn primary" id="timer-main-btn" onclick="timerToggle()">▶ Start</button>
+    </div>
+    <button class="timer-btn success" id="timer-done-btn" onclick="timerFinish()" style="width:100%;margin-top:10px;display:none;">✓ Fertig & Zeit speichern</button>
+    <div class="timer-history" id="timer-history" style="display:none;">
+      <div class="timer-history-title">Letzte Messungen</div>
+      <div id="timer-log-list"></div>
+    </div>
+  </div>
+</div>
+
 <!-- AREA MODAL -->
 <div class="modal-overlay" id="modal-area">
   <div class="modal">
@@ -952,6 +1092,7 @@ let state = {
   completions: {},  // { "YYYY-MM-DD": [taskId, ...] }
   snooze: {},       // { taskId: "YYYY-MM-DD" (until) }
   skippedDays: [],  // ["YYYY-MM-DD"]
+  timeLogs: {},     // { taskId: [{date, seconds}] }
   nextId: 1,
   nextAreaId: 1
 };
@@ -1164,6 +1305,7 @@ function renderTaskCard(task, done) {
         </div>
       </div>
       <div class="task-actions" onclick="event.stopPropagation()">
+        ${!done ? `<button class="action-btn" onclick="openTimer(${task.id})" title="Timer starten">▶</button>` : ''}
         ${!done ? `<button class="action-btn" onclick="openSnooze(${task.id})" title="Verschieben">💤</button>` : ''}
         <button class="action-btn" onclick="openEditModal(${task.id})" title="Bearbeiten">✏️</button>
       </div>
@@ -1490,6 +1632,187 @@ function showView(viewId) {
   const map = { 'view-today': 'nav-today', 'view-stats': 'nav-stats', 'view-manage': 'nav-manage' };
   document.getElementById(map[viewId])?.classList.add('active');
   if (viewId === 'view-stats') renderStats();
+}
+
+// ============ TIMER ============
+let timerTaskId = null;
+let timerSeconds = 0;
+let timerInterval = null;
+let timerRunning = false;
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+function openTimer(taskId) {
+  // If timer running for different task, ask
+  if (timerRunning && timerTaskId !== taskId) {
+    if (!confirm('Läuft bereits ein Timer. Diesen stoppen und neuen starten?')) return;
+    clearInterval(timerInterval);
+    timerRunning = false;
+    timerInterval = null;
+  }
+  timerTaskId = taskId;
+  if (!timerRunning) timerSeconds = 0;
+  openTimerModal();
+}
+
+function openTimerModal() {
+  const task = state.tasks.find(t => t.id === timerTaskId);
+  if (!task) return;
+
+  document.getElementById('timer-task-name').textContent = areaEmoji(task.cat) + ' ' + task.name;
+  document.getElementById('timer-estimate').textContent = 'Schätzung: ~' + task.minutes + ' min';
+  updateTimerDisplay();
+  renderTimerHistory(task);
+
+  const mainBtn = document.getElementById('timer-main-btn');
+  mainBtn.textContent = timerRunning ? '⏸ Pause' : (timerSeconds > 0 ? '▶ Weiter' : '▶ Start');
+  mainBtn.className = 'timer-btn ' + (timerRunning ? 'secondary' : 'primary');
+  document.getElementById('timer-done-btn').style.display = timerSeconds > 0 ? 'block' : 'none';
+
+  openModal('modal-timer');
+}
+
+function updateTimerDisplay() {
+  const txt = fmtTime(timerSeconds);
+  document.getElementById('timer-clock').textContent = txt;
+  document.getElementById('timer-bar-time').textContent = txt;
+  const clock = document.getElementById('timer-clock');
+  clock.className = 'timer-clock' + (timerRunning ? ' running' : '');
+}
+
+function timerToggle() {
+  if (timerRunning) {
+    // Pause
+    clearInterval(timerInterval);
+    timerRunning = false;
+    timerInterval = null;
+    document.getElementById('timer-main-btn').textContent = '▶ Weiter';
+    document.getElementById('timer-main-btn').className = 'timer-btn primary';
+    document.getElementById('timer-done-btn').style.display = 'block';
+    document.getElementById('timer-clock').className = 'timer-clock';
+  } else {
+    // Start / Resume
+    timerRunning = true;
+    timerInterval = setInterval(() => {
+      timerSeconds++;
+      updateTimerDisplay();
+      document.getElementById('timer-bar-time').textContent = fmtTime(timerSeconds);
+    }, 1000);
+    document.getElementById('timer-main-btn').textContent = '⏸ Pause';
+    document.getElementById('timer-main-btn').className = 'timer-btn secondary';
+    document.getElementById('timer-done-btn').style.display = 'none';
+    document.getElementById('timer-clock').className = 'timer-clock running';
+    // Show floating bar
+    const bar = document.getElementById('timer-bar');
+    const task = state.tasks.find(t => t.id === timerTaskId);
+    document.getElementById('timer-bar-name').textContent = task ? task.name : '';
+    bar.classList.add('visible');
+  }
+  updateTimerDisplay();
+}
+
+function timerReset() {
+  clearInterval(timerInterval);
+  timerRunning = false;
+  timerInterval = null;
+  timerSeconds = 0;
+  updateTimerDisplay();
+  document.getElementById('timer-main-btn').textContent = '▶ Start';
+  document.getElementById('timer-main-btn').className = 'timer-btn primary';
+  document.getElementById('timer-done-btn').style.display = 'none';
+  document.getElementById('timer-clock').className = 'timer-clock';
+  document.getElementById('timer-bar').classList.remove('visible');
+}
+
+function timerFinish() {
+  if (timerSeconds === 0) return;
+  clearInterval(timerInterval);
+  timerRunning = false;
+  timerInterval = null;
+  document.getElementById('timer-bar').classList.remove('visible');
+
+  // Save log
+  if (!state.timeLogs[timerTaskId]) state.timeLogs[timerTaskId] = [];
+  state.timeLogs[timerTaskId].unshift({ date: today(), seconds: timerSeconds });
+  // Keep max 10 entries per task
+  if (state.timeLogs[timerTaskId].length > 10) state.timeLogs[timerTaskId].pop();
+  save();
+
+  // Mark as done
+  const t = today();
+  if (!state.completions[t]) state.completions[t] = [];
+  if (!state.completions[t].includes(timerTaskId)) {
+    state.completions[t].push(timerTaskId);
+    const due = state.tasks.filter(isTaskDueToday);
+    const doneNow = due.filter(t2 => (state.completions[t]||[]).includes(t2.id));
+    if (due.length > 0 && doneNow.length === due.length) setTimeout(celebrate, 400);
+  }
+
+  // Show done state
+  document.getElementById('timer-clock').className = 'timer-clock done-color';
+  document.getElementById('timer-main-btn').style.display = 'none';
+  document.getElementById('timer-reset-btn').style.display = 'none';
+  document.getElementById('timer-done-btn').style.display = 'none';
+
+  const task = state.tasks.find(t => t.id === timerTaskId);
+  const est = (task ? task.minutes * 60 : 0);
+  const diff = timerSeconds - est;
+  let msg = '';
+  if (est > 0) {
+    if (Math.abs(diff) < 30) msg = '🎯 Genau wie geschätzt!';
+    else if (diff < 0) msg = `⚡ ${fmtTime(Math.abs(diff))} schneller als geschätzt!`;
+    else msg = `⏳ ${fmtTime(diff)} länger als geschätzt.`;
+  }
+
+  // Inject result
+  const display = document.getElementById('timer-display') || document.querySelector('.timer-display');
+  const resultEl = document.createElement('div');
+  resultEl.style.cssText = 'margin-top:12px;font-size:15px;font-weight:600;color:var(--green);text-align:center;';
+  resultEl.textContent = msg;
+  document.querySelector('.timer-display').appendChild(resultEl);
+
+  setTimeout(() => {
+    closeModal('modal-timer');
+    timerSeconds = 0;
+    document.getElementById('timer-main-btn').style.display = '';
+    document.getElementById('timer-reset-btn').style.display = '';
+    document.getElementById('timer-clock').className = 'timer-clock';
+    document.getElementById('timer-main-btn').textContent = '▶ Start';
+    document.getElementById('timer-main-btn').className = 'timer-btn primary';
+    resultEl.remove();
+    renderTodayTasks();
+    updateProgress();
+    renderStats();
+  }, 2000);
+}
+
+function renderTimerHistory(task) {
+  const logs = state.timeLogs[task.id] || [];
+  const histEl = document.getElementById('timer-history');
+  const listEl = document.getElementById('timer-log-list');
+  if (!logs.length) { histEl.style.display = 'none'; return; }
+  histEl.style.display = 'block';
+  const est = task.minutes * 60;
+  const days = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+  listEl.innerHTML = logs.map(log => {
+    const d = new Date(log.date);
+    const label = `${days[d.getDay()]}, ${d.getDate()}.${d.getMonth()+1}.`;
+    const diff = log.seconds - est;
+    let vsClass = 'equal', vsText = '≈ Wie geschätzt';
+    if (est > 0 && Math.abs(diff) > 30) {
+      if (diff < 0) { vsClass = 'faster'; vsText = `−${fmtTime(Math.abs(diff))}`; }
+      else { vsClass = 'slower'; vsText = `+${fmtTime(diff)}`; }
+    }
+    return `<div class="timer-log-row">
+      <span class="timer-log-date">${label}</span>
+      <span class="timer-log-time">${fmtTime(log.seconds)}</span>
+      <span class="timer-log-vs ${vsClass}">${vsText}</span>
+    </div>`;
+  }).join('');
 }
 
 // ============ AREAS MANAGEMENT ============
