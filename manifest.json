@@ -5,15 +5,14 @@
   "start_url": "/haushalt/",
   "scope": "/haushalt/",
   "display": "standalone",
-  "background_color": "#0e0e12",
-  "theme_color": "#0e0e12",
+  "background_color": "#0a0a0e",
+  "theme_color": "#0a0a0e",
   "orientation": "portrait-primary",
   "icons": [
-    { "src": "/haushalt/icon-192.png?v=3", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/haushalt/icon-192.png?v=3", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/haushalt/icon-512.png?v=3", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/haushalt/icon-512.png?v=3", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/haushalt/icon-192.png?v=4", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/haushalt/icon-192.png?v=4", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/haushalt/icon-512.png?v=4", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/haushalt/icon-512.png?v=4", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
-  "categories": ["lifestyle", "productivity"],
   "lang": "de"
 }
