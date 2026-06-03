@@ -1118,7 +1118,7 @@ async function deriveKey(deviceId) {
     'raw', enc.encode(deviceId), { name: 'PBKDF2' }, false, ['deriveKey']
   );
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode('haushalt-backup-salt-v1'), iterations: 200000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: enc.encode('haushalt-backup-salt-v1'), iterations: 100000, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -1127,23 +1127,32 @@ async function deriveKey(deviceId) {
 }
 
 async function encryptState(stateObj, deviceId) {
-  const key = await deriveKey(deviceId);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(JSON.stringify(stateObj));
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-  // Format: base64(iv) + '.' + base64(ciphertext)
-  const toB64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
-  return toB64(iv) + '.' + toB64(ciphertext);
+  try {
+    const key = await deriveKey(deviceId);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(JSON.stringify(stateObj));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+    const toB64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+    return toB64(iv) + '.' + toB64(ciphertext);
+  } catch(e) {
+    console.error('encryptState Fehler:', e);
+    throw e;
+  }
 }
 
 async function decryptState(encrypted, deviceId) {
-  const key = await deriveKey(deviceId);
-  const [ivB64, ctB64] = encrypted.split('.');
-  const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-  const iv = fromB64(ivB64);
-  const ciphertext = fromB64(ctB64);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-  return JSON.parse(new TextDecoder().decode(plain));
+  try {
+    const key = await deriveKey(deviceId);
+    const [ivB64, ctB64] = encrypted.split('.');
+    const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+    const iv = fromB64(ivB64);
+    const ciphertext = fromB64(ctB64);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    return JSON.parse(new TextDecoder().decode(plain));
+  } catch(e) {
+    console.error('decryptState Fehler:', e);
+    throw e;
+  }
 }
 
 // ============ JSON EXPORT / IMPORT ============
@@ -1212,9 +1221,12 @@ async function pushToSupabase() {
     if (res.ok) {
       setSyncStatus('✅ Cloud-Backup gespeichert (verschlüsselt)', 'green');
     } else {
-      setSyncStatus('⚠️ Backup fehlgeschlagen', 'amber');
+      const errText = await res.text();
+      console.error('Supabase Backup Fehler', res.status, errText);
+      setSyncStatus('⚠️ Backup fehlgeschlagen (' + res.status + ')', 'amber');
     }
   } catch(e) {
+    console.error('pushToSupabase Exception:', e);
     setSyncStatus('📵 Offline – lokal gespeichert', 'dim');
   }
 }
