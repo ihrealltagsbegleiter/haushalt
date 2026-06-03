@@ -909,6 +909,16 @@
       <button onclick="pullFromSupabase()" style="flex:1;padding:11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text-muted);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">⬇ Wiederherstellen</button>
     </div>
     <div id="sync-status" style="font-size:12px;margin-top:10px;min-height:16px;text-align:center;transition:color 0.3s;"></div>
+    <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;">📁 JSON-Datei</div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="exportJSON()" style="flex:1;padding:11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--green-soft);color:var(--green);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">⬇ Exportieren</button>
+        <label style="flex:1;padding:11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text-muted);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;text-align:center;">
+          ⬆ Importieren
+          <input type="file" accept=".json" onchange="importJSON(event)" style="display:none;">
+        </label>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1097,6 +1107,46 @@ function getDeviceId() {
     localStorage.setItem('haushalt_device_id', id);
   }
   return id;
+}
+
+// ============ JSON EXPORT / IMPORT ============
+function exportJSON() {
+  const filename = `haushalt-backup-${today()}.json`;
+  const json = JSON.stringify(state, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setSyncStatus('✅ Exportiert: ' + filename, 'green');
+}
+
+function importJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      // Validierung: muss tasks-Array enthalten
+      if (!imported.tasks || !Array.isArray(imported.tasks)) {
+        setSyncStatus('❌ Ungültige Backup-Datei', 'amber');
+        return;
+      }
+      if (!confirm(`Backup vom ${file.name} importieren?\n${imported.tasks.length} Aufgaben, ${(imported.areas||[]).length} Gebiete.\n\nAktuelle Daten werden überschrieben.`)) return;
+      state = { ...state, ...imported };
+      save();
+      render();
+      setSyncStatus('✅ Importiert: ' + file.name, 'green');
+    } catch(err) {
+      setSyncStatus('❌ Datei konnte nicht gelesen werden', 'amber');
+    }
+    // Input zurücksetzen damit dieselbe Datei nochmal gewählt werden kann
+    event.target.value = '';
+  };
+  reader.readAsText(file);
 }
 
 let sbSyncTimeout = null;
