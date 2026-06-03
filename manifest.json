@@ -9,10 +9,10 @@
   "theme_color": "#0e0e12",
   "orientation": "portrait-primary",
   "icons": [
-    { "src": "/haushalt/icon-192.png?v=2", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/haushalt/icon-192.png?v=2", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/haushalt/icon-512.png?v=2", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/haushalt/icon-512.png?v=2", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/haushalt/icon-192.png?v=3", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/haushalt/icon-192.png?v=3", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/haushalt/icon-512.png?v=3", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/haushalt/icon-512.png?v=3", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "categories": ["lifestyle", "productivity"],
   "lang": "de"
