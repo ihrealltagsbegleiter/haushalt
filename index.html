@@ -1094,7 +1094,7 @@
 // ============ STATE ============
 const STORAGE_KEY = 'haushalt_v1';
 
-// ============ SUPABASE BACKUP ============
+// ============ SUPABASE BACKUP (AES-256-GCM verschlüsselt) ============
 const SB_URL  = 'https://cuukfowezhcosjnuckuo.supabase.co';
 const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1dWtmb3dlemhjb3NqbnVja3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTc3MTYsImV4cCI6MjA5NTk3MzcxNn0.vMs9Z4Hk0oe2k-qPR9Nq0oUNsO_3X-DbTu8Y5OyK_NA';
 const SB_HEADERS = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Prefer': 'resolution=merge-duplicates' };
@@ -1107,6 +1107,43 @@ function getDeviceId() {
     localStorage.setItem('haushalt_device_id', id);
   }
   return id;
+}
+
+// ---- AES-256-GCM Verschlüsselung ----
+// Schlüssel wird aus Geräte-ID + festem Salt via PBKDF2 abgeleitet.
+// Kein separates Passwort nötig – Geräte-ID ist der Schlüssel.
+async function deriveKey(deviceId) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(deviceId), { name: 'PBKDF2' }, false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('haushalt-backup-salt-v1'), iterations: 200000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptState(stateObj, deviceId) {
+  const key = await deriveKey(deviceId);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(JSON.stringify(stateObj));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+  // Format: base64(iv) + '.' + base64(ciphertext)
+  const toB64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  return toB64(iv) + '.' + toB64(ciphertext);
+}
+
+async function decryptState(encrypted, deviceId) {
+  const key = await deriveKey(deviceId);
+  const [ivB64, ctB64] = encrypted.split('.');
+  const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const iv = fromB64(ivB64);
+  const ciphertext = fromB64(ctB64);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return JSON.parse(new TextDecoder().decode(plain));
 }
 
 // ============ JSON EXPORT / IMPORT ============
@@ -1159,9 +1196,11 @@ function scheduleCloudSync() {
 
 async function pushToSupabase() {
   try {
+    const deviceId = getDeviceId();
+    const encrypted = await encryptState(state, deviceId);
     const body = JSON.stringify({
-      device_id: getDeviceId(),
-      state_json: state,
+      device_id: deviceId,
+      state_json: encrypted,
       app_version: '1.0',
       saved_at: new Date().toISOString()
     });
@@ -1171,7 +1210,7 @@ async function pushToSupabase() {
       body
     });
     if (res.ok) {
-      setSyncStatus('✅ Cloud-Backup gespeichert', 'green');
+      setSyncStatus('✅ Cloud-Backup gespeichert (verschlüsselt)', 'green');
     } else {
       setSyncStatus('⚠️ Backup fehlgeschlagen', 'amber');
     }
@@ -1183,8 +1222,9 @@ async function pushToSupabase() {
 async function pullFromSupabase() {
   setSyncStatus('⏳ Lade Backup…', 'accent');
   try {
+    const deviceId = getDeviceId();
     const res = await fetch(
-      `${SB_URL}/rest/v1/haushalt_backup?device_id=eq.${getDeviceId()}&select=state_json,saved_at`,
+      `${SB_URL}/rest/v1/haushalt_backup?device_id=eq.${deviceId}&select=state_json,saved_at`,
       { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } }
     );
     const data = await res.json();
@@ -1193,7 +1233,16 @@ async function pullFromSupabase() {
       const d = new Date(remote.saved_at);
       const label = `${d.getDate()}.${d.getMonth()+1}.${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
       if (confirm(`Cloud-Backup vom ${label} wiederherstellen?\n\nAchtung: Lokale Daten werden überschrieben.`)) {
-        state = { ...state, ...remote.state_json };
+        let restoredState;
+        const raw = remote.state_json;
+        // Rückwärtskompatibel: altes Klartext-JSONB (Objekt) oder neues verschlüsseltes Format (String mit '.')
+        if (typeof raw === 'string' && raw.includes('.')) {
+          restoredState = await decryptState(raw, deviceId);
+        } else {
+          // Altdaten unverschlüsselt (Migration)
+          restoredState = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        }
+        state = { ...state, ...restoredState };
         save();
         render();
         setSyncStatus('✅ Wiederhergestellt: ' + label, 'green');
@@ -1205,6 +1254,7 @@ async function pullFromSupabase() {
     }
   } catch(e) {
     setSyncStatus('📵 Offline – kein Abruf möglich', 'dim');
+    console.error('pullFromSupabase:', e);
   }
 }
 
