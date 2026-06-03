@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Haushaltsroutinen</title>
 
-<!-- PWA Manifest (inline via data URI) -->
-<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Haushaltsroutinen%22%2C%22short_name%22%3A%22Haushalt%22%2C%22description%22%3A%22ADHS-freundliche%20Haushaltsroutinen%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230e0e12%22%2C%22theme_color%22%3A%22%230e0e12%22%2C%22orientation%22%3A%22portrait%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D'http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg'%2520viewBox%253D'0%25200%2520512%2520512'%253E%253Crect%2520width%253D'512'%2520height%253D'512'%2520rx%253D'100'%2520fill%253D'%25230e0e12'%252F%253E%253Ccircle%2520cx%253D'256'%2520cy%253D'200'%2520r%253D'100'%2520fill%253D'none'%2520stroke%253D'%25237c6dfa'%2520stroke-width%253D'28'%252F%253E%253Cpath%2520d%253D'M156%2520200%2520a100%2520100%25200%25200%25201%2520200%25200'%2520fill%253D'%25237c6dfa'%252F%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+<!-- PWA Manifest -->
+<link rel="manifest" href="/haushalt/manifest.json">
 
 <!-- Apple PWA Tags -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,8 +15,8 @@
 <meta name="theme-color" content="#0e0e12">
 <meta name="mobile-web-app-capable" content="yes">
 
-<!-- Apple Touch Icon (inline SVG als PNG-Ersatz) -->
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%230e0e12'/><circle cx='90' cy='72' r='36' fill='none' stroke='%237c6dfa' stroke-width='10'/><path d='M54 72 a36 36 0 0 1 72 0' fill='%237c6dfa'/><rect x='42' y='118' width='96' height='10' rx='5' fill='%237c6dfa' opacity='.5'/><rect x='55' y='136' width='70' height='10' rx='5' fill='%237c6dfa' opacity='.3'/></svg>">
+<!-- Apple Touch Icon -->
+<link rel="apple-touch-icon" href="/haushalt/icon-192.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -2018,29 +2018,9 @@ function updateTaskCatDropdown() {
 }
 
 // ============ PWA: SERVICE WORKER ============
-const SW_SRC = `
-const CACHE = 'haushalt-v1';
-const ASSETS = [location.href];
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
-});
-self.addEventListener('activate', e => {
-  e.waitUntil(clients.claim());
-});
-self.addEventListener('fetch', e => {
-  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
-    const clone = res.clone();
-    caches.open(CACHE).then(c => c.put(e.request, clone));
-    return res;
-  })));
-});
-`;
-
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
-  const blob = new Blob([SW_SRC], { type: 'application/javascript' });
-  const url = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(url).catch(() => {});
+  navigator.serviceWorker.register('/haushalt/sw.js').catch(() => {});
 }
 
 // iOS install hint (shown once)
